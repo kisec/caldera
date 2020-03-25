@@ -348,6 +348,8 @@ class DataService(BaseService):
             if existing.payload:
                 payloads = existing.payload.split(',')
                 for payload in payloads:
+                    if existing.check_payload_uuid_variant(payload):
+                        payload = existing.find_payload_by_uuid(payload)
                     _, path = await self.get_service('file_svc').find_file_path(payload)
                     if not path:
                         self.log.error('Payload referenced in %s but not found: %s' % (existing.ability_id, payload))

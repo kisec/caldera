@@ -1,4 +1,5 @@
 import os
+import re
 from base64 import b64decode
 
 from app.objects.secondclass.c_parser import Parser
@@ -9,7 +10,11 @@ from app.utility.base_object import BaseObject
 
 class Ability(BaseObject):
 
-    RESERVED = dict(payload='#{payload}')
+    RESERVED = dict(payload='#{payload}',
+                    unique_payload=re.compile(
+                        pattern='#{payload:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})}',
+                        flags=re.DOTALL
+                    ))
 
     @property
     def test(self):
@@ -93,3 +98,22 @@ class Ability(BaseObject):
         decoded_cmd = b64decode(encoded_cmd).decode('utf-8', errors='ignore').replace('\n', '')
         decoded_cmd = decoded_cmd.replace(self.RESERVED['payload'], self.payload)
         return decoded_cmd
+
+    def replace_payload_uuid(self, encoded_cmd, uuid):
+        decoded_cmd = b64decode(encoded_cmd).decode('utf-8', errors='ignore').replace('\n', '')
+        decoded_cmd = decoded_cmd.replace(self.RESERVED['payload'], '#{payload:%s}' % uuid)
+        return decoded_cmd
+
+    def check_payload_uuid_variant(self, payload):
+        if self.RESERVED['unique_payload'].match(payload):
+            return True
+        return False
+
+    def find_payload_by_uuid(self, uuid, payload_type='standard_payloads'):
+        for k, v in self.get_config(name='payloads', prop=payload_type).items():
+            if v['id'] == uuid:
+                return k
+
+    def get_payloads(self, uuids=None, payload_type='standard_payloads'):
+        return [k for uuid in uuids for k, v in self.get_config(name='payloads', prop=payload_type).items()
+                if v['id'] == uuid]

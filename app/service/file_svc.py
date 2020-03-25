@@ -19,7 +19,7 @@ class FileSvc(BaseService):
         self.log = self.add_service('file_svc', self)
         self.data_svc = self.get_service('data_svc')
         self.special_payloads = dict()
-        self.encryptor = self._get_encryptor()
+        self.encryptor = self._get_encryptor(key='api_key_red')
         self.encrypt_output = False if self.get_config('encrypt_files') is False else True
 
     async def get_file(self, headers):
@@ -138,19 +138,6 @@ class FileSvc(BaseService):
         """
         self.special_payloads[name] = func
 
-    def _save(self, filename, content):
-        if self.encryptor and self.encrypt_output:
-            content = bytes(FILE_ENCRYPTION_FLAG, 'utf-8') + self.encryptor.encrypt(content)
-        with open(filename, 'wb') as f:
-            f.write(content)
-
-    def _read(self, filename):
-        with open(filename, 'rb') as f:
-            buf = f.read()
-        if self.encryptor and buf.startswith(bytes(FILE_ENCRYPTION_FLAG, encoding='utf-8')):
-            buf = self.encryptor.decrypt(buf[len(FILE_ENCRYPTION_FLAG):])
-        return buf
-
     @staticmethod
     async def compile_go(platform, output, src_fle, arch='amd64', ldflags='-s -w', cflags='', buildmode='',
                          build_dir='.'):
@@ -173,13 +160,26 @@ class FileSvc(BaseService):
 
     """ PRIVATE """
 
-    def _get_encryptor(self):
+    def _save(self, filename, content):
+        if self.encryptor:
+            content = bytes(FILE_ENCRYPTION_FLAG, 'utf-8') + self.encryptor.encrypt(content)
+        with open(filename, 'wb') as f:
+            f.write(content)
+
+    def _read(self, filename):
+        with open(filename, 'rb') as f:
+            buf = f.read()
+        if self.encryptor and buf.startswith(bytes(FILE_ENCRYPTION_FLAG, encoding='utf-8')):
+            buf = self.encryptor.decrypt(buf[len(FILE_ENCRYPTION_FLAG):])
+        return buf
+
+    def _get_encryptor(self, key):
         generated_key = PBKDF2HMAC(algorithm=hashes.SHA256(),
                                    length=32,
                                    salt=bytes(self.get_config('crypt_salt'), 'utf-8'),
                                    iterations=2 ** 20,
                                    backend=default_backend())
-        return Fernet(base64.urlsafe_b64encode(generated_key.derive(bytes(self.get_config('api_key_red'), 'utf-8'))))
+        return Fernet(base64.urlsafe_b64encode(generated_key.derive(bytes(self.get_config(key), 'utf-8'))))
 
 
 def _go_vars(arch, platform):
